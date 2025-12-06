@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/png" href="LG.png">
+    <title>Veness</title>  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- External CSS -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Markdown & Sanitization -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+  
+  <!-- Highlight.js for Code Highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body class="h-screen overflow-hidden">
+
+  <!-- ========== MAIN CHAT CONTAINER ========== -->
+  <div class="w-full h-full flex flex-col glass overflow-hidden">
+    
+    <!-- ========== HEADER BAR ========== -->
+    <div id="chatHeader" class="glass-dark px-6 py-4 flex items-center justify-between border-b border-white/10 transition-all duration-300 ease-in-out">
+      <!-- Left: Branding -->
+      <div class="flex items-center gap-3">
+        <img src="LG.png" alt="Logo" class="w-14 h-14 object-contain">
+        <div class="flex flex-col">
+          <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <span class="text-gray-400">Ayush's</span>
+            Veness
+          </h1>
+          <p class="text-xs md:text-sm text-gray-400 mt-0.5">Smart, Fast and made for You!</p>
+        </div>
+      </div>
+      
+      <!-- Right: Settings Icon -->
+      <button 
+        id="settingsBtn" 
+        class="icon-vector p-2.5 rounded-xl transition-all duration-200"
+        aria-label="Settings"
+      >
+        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ========== CHAT MESSAGES AREA ========== -->
+    <div 
+      id="chatArea" 
+      class="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-4 custom-scrollbar"
+    >
+      <!-- Messages will appear here dynamically -->
+    </div>
+
+    <!-- ========== INPUT BAR ========== -->
+    <div id="inputBar" class="glass-dark px-4 md:px-6 py-4 border-t border-white/10 transition-all duration-300">
+      <!-- File Preview Area -->
+      <div id="filePreview" class="hidden mb-2 px-2">
+        <div class="inline-flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5 text-sm text-gray-300 border border-white/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span id="fileName" class="max-w-[200px] truncate">filename.txt</span>
+          <button id="removeFileBtn" class="hover:text-white ml-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+      </div>
+
+      <div class="flex items-end gap-2 md:gap-3 relative">
+        
+        <!-- Hidden File Input -->
+        <input type="file" id="fileInput" class="hidden" accept=".txt,.js,.py,.html,.css,.json,.md,.csv">
+
+        <!-- Left icons -->
+        <div id="leftIcons" class="flex items-center gap-2 pb-2 transition-all duration-300">
+          <button 
+            id="attachBtn" 
+            class="icon-vector p-2.5 rounded-xl transition-all duration-200"
+            aria-label="Attach file"
+          >
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Center: Text input -->
+        <div class="flex-1 relative group">
+          <textarea
+            id="messageInput"
+            class="message-textarea w-full apple-glass-input rounded-3xl px-5 py-3.5 text-white placeholder-gray-400 focus:outline-none transition-all text-sm md:text-base"
+            placeholder="ask"
+            rows="1"
+          ></textarea>
+          
+          <!-- Fullscreen Toggle Button (Hidden by default) -->
+          <button 
+            id="fullscreenToggleBtn" 
+            class="absolute top-2 right-2 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 transition-all opacity-0 pointer-events-none"
+            title="Fullscreen Editor"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Right icons -->
+        <div id="rightIcons" class="flex items-center gap-2 pb-2 transition-all duration-300">
+          <button 
+            id="micBtn" 
+            class="icon-vector p-2.5 rounded-xl transition-all duration-200"
+            aria-label="Voice input"
+          >
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+            </svg>
+          </button>
+          
+          <button 
+            id="sendBtn" 
+            class="macos-send-btn text-gray-400 px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 font-medium text-sm"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+            </svg>
+            <span class="hidden sm:inline">Send</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Fullscreen Editor Modal -->
+  <div id="fullscreenModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl hidden flex-col">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <h2 class="text-white font-semibold">Fullscreen Editor</h2>
+      <div class="flex items-center gap-3">
+        <button id="closeFullscreenBtn" class="text-gray-400 hover:text-white transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="flex-1 p-6">
+      <textarea 
+        id="fullscreenInput" 
+        class="w-full h-full bg-transparent text-white text-lg resize-none focus:outline-none font-mono"
+        placeholder="Type your message here..."
+      ></textarea>
+    </div>
+    <div class="px-6 py-4 border-t border-white/10 flex justify-end">
+      <button id="saveFullscreenBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-medium transition-colors">
+        Done
+      </button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+        <h2 class="text-white font-semibold text-lg">Settings & Info</h2>
+        <button id="closeSettingsBtn" class="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6 space-y-6">
+        <!-- Version Info -->
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400">App Version</span>
+          <span class="text-emerald-400 font-mono bg-emerald-400/10 px-2 py-1 rounded text-sm">v1.0.0</span>
+        </div>
+
+        <!-- Model Info -->
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400">AI Model</span>
+          <span class="text-blue-400 font-mono bg-blue-400/10 px-2 py-1 rounded text-sm">llama-3.1-8b-instant</span>
+        </div>
+
+        <!-- Old Site Link -->
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400 block">Legacy Version</label>
+          <a href="https://wenes.onrender.com" target="_blank" class="flex items-center justify-between w-full p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group text-left">
+            <span class="text-white group-hover:text-emerald-400 transition-colors">Old Wenes AI Voice Assistant</span>
+            <svg class="w-4 h-4 text-gray-500 group-hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- External JavaScript -->
+  <script src="script.js"></script>
+
+</body>
+</html>
