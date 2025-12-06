@@ -59,7 +59,7 @@ body {
 
 /* Add padding to bottom of chat area to allow scrolling last message to top */
 #chatArea {
-  padding-bottom: 60vh !important;
+  padding-bottom: 20vh !important;
 }
 
 /* Typing indicator animation */
@@ -561,5 +561,6 @@ button,
     padding: 0 !important;
   }
 }
+
 
 
