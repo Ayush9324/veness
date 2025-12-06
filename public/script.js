@@ -719,6 +719,7 @@ window.addEventListener('load', () => {
       scrollToBottom();
       
       // Adjust layout if needed (e.g. for iOS Safari)
+      /*
       if (window.visualViewport.height < window.innerHeight) {
         // Keyboard is likely open
         document.body.style.height = window.visualViewport.height + 'px';
@@ -726,6 +727,8 @@ window.addEventListener('load', () => {
       } else {
         document.body.style.height = '100%';
       }
+      */
     });
   }
 });
+
