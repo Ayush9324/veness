@@ -1,17 +1,18 @@
 import express from "express";
-import dotenv from "dotenv";
-import Groq from "groq-sdk";
 import path from "path";
 import { fileURLToPath } from "url";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
-import http from "http";
 
 // Measure startup time
 console.time("⚡ Server Startup");
 
-dotenv.config();
+// Lazy load dotenv only in development
+if (process.env.NODE_ENV !== 'production') {
+  const { default: dotenv } = await import("dotenv");
+  dotenv.config();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,10 +35,19 @@ app.use(
           "cdnjs.cloudflare.com",
           "'unsafe-inline'",
           "'unsafe-eval'", // Required for Tailwind CDN
+          "blob:", // Required for Tesseract/PDF.js workers
         ],
+        workerSrc: ["'self'", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net"],
+        connectSrc: [
+          "'self'", 
+          "cdnjs.cloudflare.com", 
+          "cdn.jsdelivr.net", 
+          "https://tessdata.projectnaptha.com", // Required for Tesseract language data
+          "data:", // Required for Tesseract workers
+          "blob:",
+        ],
       },
     },
   })
@@ -51,32 +61,31 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-// Allow CORS only for specific origins if needed, or remove if same-origin
-// For now, we'll allow same-origin by default (no CORS middleware needed for same-origin)
-// If you need external access, uncomment and configure:
-// app.use(cors({ origin: "https://your-frontend-domain.com" }));
 app.use(express.json());
 
 // Serve frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, "public")));
 
-// Check for API Key
-if (!process.env.GROQ_API_KEY) {
-  console.error("❌ Error: GROQ_API_KEY is missing in .env file.");
-  console.error("👉 Please create a .env file and add: GROQ_API_KEY=your_api_key_here");
-  process.exit(1);
-}
-
-// GROQ client
-const client = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Lazy load Groq client
+let client;
 
 // Allowed models whitelist
 const ALLOWED_MODELS = ["llama3-70b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
 
 // API: chat with conversation memory
 app.post("/api/chat", async (req, res) => {
+  // Initialize Groq client on first request (Lazy Loading)
+  if (!client) {
+    if (!process.env.GROQ_API_KEY) {
+      console.error("❌ Error: GROQ_API_KEY is missing.");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+    const { default: Groq } = await import("groq-sdk");
+    client = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+
   const body = req.body;
 
   // Validate incoming body structure

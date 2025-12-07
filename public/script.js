@@ -23,6 +23,7 @@ const closeFullscreenBtn = document.getElementById('closeFullscreenBtn');
 const saveFullscreenBtn = document.getElementById('saveFullscreenBtn');
 const settingsModal = document.getElementById('settingsModal');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 
 // File Upload Elements
 const fileInput = document.getElementById('fileInput');
@@ -34,27 +35,39 @@ let currentFileName = null;
 
 // ========== SCROLL BEHAVIOR ==========
 let lastScrollTop = 0;
+let currentMarginTop = 0;
+
 chatArea.addEventListener('scroll', () => {
   const scrollTop = chatArea.scrollTop;
-  const scrollHeight = chatArea.scrollHeight;
-  const clientHeight = chatArea.clientHeight;
+  const headerHeight = chatHeader.offsetHeight;
   
-  // Check if we are at the bottom (with tolerance)
-  // When header hides, clientHeight increases, causing scrollTop to decrease if pinned to bottom.
-  // This prevents the "scroll up" logic from triggering immediately after hiding header.
-  const isAtBottom = scrollHeight - scrollTop - clientHeight < 20;
+  // Calculate scroll delta
+  const delta = scrollTop - lastScrollTop;
   
-  // Only trigger if we've scrolled a bit to avoid jitter
-  if (Math.abs(scrollTop - lastScrollTop) > 10) {
-    if (scrollTop > lastScrollTop && scrollTop > 50) {
-      // Scrolling down - Hide Header
-      chatHeader.style.marginTop = `-${chatHeader.offsetHeight}px`;
-    } else if (scrollTop < lastScrollTop && !isAtBottom) {
-      // Scrolling up AND NOT pinned to bottom - Show Header
-      chatHeader.style.marginTop = '0';
-    }
-    lastScrollTop = scrollTop;
+  // Update margin top based on delta
+  // If scrolling down (delta > 0), margin decreases (becomes more negative)
+  // If scrolling up (delta < 0), margin increases (becomes closer to 0)
+  currentMarginTop = currentMarginTop - delta;
+  
+  // Clamp the margin
+  // Cannot be less than -headerHeight (fully hidden)
+  // Cannot be more than 0 (fully visible)
+  if (currentMarginTop < -headerHeight) {
+    currentMarginTop = -headerHeight;
+  } else if (currentMarginTop > 0) {
+    currentMarginTop = 0;
   }
+  
+  // Apply the margin
+  chatHeader.style.marginTop = `${currentMarginTop}px`;
+  
+  // Special case: If at the very top, always show header
+  if (scrollTop <= 0) {
+    currentMarginTop = 0;
+    chatHeader.style.marginTop = '0px';
+  }
+  
+  lastScrollTop = scrollTop;
 });
 
 // ========== CONVERSATION MEMORY ==========
@@ -169,40 +182,37 @@ function showCopySuccess(btn) {
 // Text-to-Speech Logic
 let currentUtterance = null;
 let currentSpeakBtn = null;
+let currentTextElement = null;
 
-function toggleSpeech(text, btn) {
+function toggleSpeech(text, btn, textElement) {
   const synth = window.speechSynthesis;
 
   // If this button is currently active (showing stop state), stop it
   if (currentSpeakBtn === btn) {
-    synth.cancel();
-    resetSpeakButton(btn);
-    currentSpeakBtn = null;
-    currentUtterance = null;
+    stopSpeech();
     return;
   }
 
   // If speaking something else, stop it first
-  synth.cancel();
-  if (currentSpeakBtn) {
-    resetSpeakButton(currentSpeakBtn);
-  }
+  stopSpeech();
 
   // Start speaking
   // Assign to global variable to prevent garbage collection
   currentUtterance = new SpeechSynthesisUtterance(text);
   
+  currentUtterance.onboundary = (event) => {
+    if (event.name === 'word' && textElement) {
+      highlightWord(textElement, event.charIndex, event.charLength);
+    }
+  };
+
   currentUtterance.onend = () => {
-    resetSpeakButton(btn);
-    currentSpeakBtn = null;
-    currentUtterance = null;
+    stopSpeech();
   };
 
   currentUtterance.onerror = (e) => {
     console.error('Speech error:', e);
-    resetSpeakButton(btn);
-    currentSpeakBtn = null;
-    currentUtterance = null;
+    stopSpeech();
   };
 
   // Update button to "Stop" state
@@ -214,7 +224,25 @@ function toggleSpeech(text, btn) {
   `;
   
   currentSpeakBtn = btn;
+  currentTextElement = textElement;
   synth.speak(currentUtterance);
+}
+
+function stopSpeech() {
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  
+  if (currentSpeakBtn) {
+    resetSpeakButton(currentSpeakBtn);
+  }
+  
+  if (currentTextElement) {
+    removeHighlight(currentTextElement);
+  }
+  
+  currentSpeakBtn = null;
+  currentUtterance = null;
+  currentTextElement = null;
 }
 
 function resetSpeakButton(btn) {
@@ -226,8 +254,47 @@ function resetSpeakButton(btn) {
   `;
 }
 
+function highlightWord(root, index, length) {
+  removeHighlight(root);
+
+  let charCount = 0;
+  const treeWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+  
+  while (treeWalker.nextNode()) {
+    const node = treeWalker.currentNode;
+    const nodeLength = node.textContent.length;
+    
+    if (charCount + nodeLength > index) {
+      const startInNode = index - charCount;
+      const endInNode = startInNode + length;
+      
+      if (endInNode <= nodeLength) {
+        const range = document.createRange();
+        range.setStart(node, startInNode);
+        range.setEnd(node, endInNode);
+        
+        const span = document.createElement('span');
+        span.className = 'highlight-word';
+        range.surroundContents(span);
+      }
+      break;
+    }
+    charCount += nodeLength;
+  }
+}
+
+function removeHighlight(root) {
+  const highlighted = root.querySelector('.highlight-word');
+  if (highlighted) {
+    const text = highlighted.textContent;
+    const textNode = document.createTextNode(text);
+    highlighted.parentNode.replaceChild(textNode, highlighted);
+    root.normalize();
+  }
+}
+
 // Helper: Add message bubble
-function addMessageBubble({ text, role, autoScroll = true }) {
+function addMessageBubble({ text, role, autoScroll = true, showActions = true }) {
   const messageContainer = document.createElement('div');
   messageContainer.className = `flex items-start gap-3 message-animate ${role === 'user' ? 'justify-end' : ''}`;
 
@@ -266,52 +333,54 @@ function addMessageBubble({ text, role, autoScroll = true }) {
 
   bubble.appendChild(textElement);
 
-  // Add Text-to-Speech and Copy buttons for all messages
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'flex items-center gap-2 mt-3 pt-2 border-t border-white/5';
-  
-  // Speaker Button
-  const speakBtn = document.createElement('button');
-  speakBtn.className = 'text-gray-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center gap-2 text-xs';
-  speakBtn.innerHTML = `
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-    </svg>
-  `;
-  speakBtn.title = "Read aloud";
-  
-  // Use textContent to get clean text without HTML tags
-  const speechText = textElement.textContent;
-  speakBtn.addEventListener('click', () => toggleSpeech(speechText, speakBtn));
-  
-  // Copy Button
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'text-gray-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center gap-2 text-xs';
-  copyBtn.innerHTML = `
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-    </svg>
-  `;
-  copyBtn.title = "Copy message";
-  
-  copyBtn.addEventListener('click', () => {
-      const textToCopy = (typeof text === 'string') ? text : String(text || '');
-      navigator.clipboard.writeText(textToCopy).then(() => {
-          const originalHtml = copyBtn.innerHTML;
-          copyBtn.innerHTML = `
-          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          `;
-          setTimeout(() => {
-              copyBtn.innerHTML = originalHtml;
-          }, 2000);
-      }).catch(err => console.error('Failed to copy', err));
-  });
+  if (showActions) {
+    // Add Text-to-Speech and Copy buttons for all messages
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'flex items-center gap-2 mt-3 pt-2 border-t border-white/5';
+    
+    // Speaker Button
+    const speakBtn = document.createElement('button');
+    speakBtn.className = 'text-gray-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center gap-2 text-xs';
+    speakBtn.innerHTML = `
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+      </svg>
+    `;
+    speakBtn.title = "Read aloud";
+    
+    // Use textContent to get clean text without HTML tags
+    const speechText = textElement.textContent;
+    speakBtn.addEventListener('click', () => toggleSpeech(speechText, speakBtn, textElement));
+    
+    // Copy Button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'text-gray-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center gap-2 text-xs';
+    copyBtn.innerHTML = `
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+      </svg>
+    `;
+    copyBtn.title = "Copy message";
+    
+    copyBtn.addEventListener('click', () => {
+        const textToCopy = (typeof text === 'string') ? text : String(text || '');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            `;
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+            }, 2000);
+        }).catch(err => console.error('Failed to copy', err));
+    });
 
-  actionsDiv.appendChild(speakBtn);
-  actionsDiv.appendChild(copyBtn);
-  bubble.appendChild(actionsDiv);
+    actionsDiv.appendChild(speakBtn);
+    actionsDiv.appendChild(copyBtn);
+    bubble.appendChild(actionsDiv);
+  }
 
   const timestamp = document.createElement('p');
   timestamp.className = `text-xs text-gray-500 mt-1.5 ${role === 'user' ? 'mr-1' : 'ml-1'}`;
@@ -529,6 +598,10 @@ async function sendMessage() {
     // Reset padding when response arrives
     chatArea.style.paddingBottom = '1.5rem'; // Reset to original py-6 (1.5rem)
     
+    // Force header to show (fixes lagging header on short responses)
+    currentMarginTop = 0;
+    chatHeader.style.marginTop = '0px';
+    
     hideTypingIndicator();
     // Don't auto-scroll to bottom for AI response to keep user message in view
     // But ensure at least the start of the AI message is visible if it's off-screen
@@ -540,6 +613,11 @@ async function sendMessage() {
     
   } catch (error) {
     chatArea.style.paddingBottom = '1.5rem';
+    
+    // Force header to show
+    currentMarginTop = 0;
+    chatHeader.style.marginTop = '0px';
+
     hideTypingIndicator();
     const errorMessage = error.message || 'Sorry, I encountered an error. Please try again.';
     addMessageBubble({ text: `⚠️ ${errorMessage}`, role: 'ai' });
@@ -615,6 +693,31 @@ saveFullscreenBtn.addEventListener('click', () => {
   closeFullscreen();
 });
 
+// Download Chat Logic
+downloadBtn.addEventListener('click', () => {
+  if (conversationHistory.length === 0) {
+    alert('No conversation to download.');
+    return;
+  }
+
+  let content = "STORY OF OUR CONVERSATION\n=========================\n\n";
+  conversationHistory.forEach(msg => {
+    const role = msg.role === 'user' ? 'You' : 'Veness';
+    content += `${role}:\n${msg.content}\n\n`;
+  });
+  content += "=========================\nEnd of Conversation";
+
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `veness-story-${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
 // Event listeners
 sendBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keydown', function(e) {
@@ -655,41 +758,70 @@ attachBtn.addEventListener('click', () => {
   fileInput.click();
 });
 
-fileInput.addEventListener('change', (e) => {
+// Helper: Extract text from PDF
+async function extractTextFromPdf(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    fullText += `--- Page ${i} ---\n${pageText}\n\n`;
+  }
+  return fullText;
+}
+
+// Helper: Extract text from Image (OCR)
+async function extractTextFromImage(file) {
+  const worker = await Tesseract.createWorker('eng');
+  const ret = await worker.recognize(file);
+  await worker.terminate();
+  return ret.data.text;
+}
+
+fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  // Check file size (max 1MB for text files to be safe)
-  if (file.size > 1024 * 1024) {
-    alert('File is too large. Please upload a file smaller than 1MB.');
+  // Check file size (max 50MB)
+  if (file.size > 50 * 1024 * 1024) {
+    alert('File is too large. Please upload a file smaller than 50MB.');
     this.value = '';
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const content = e.target.result;
-    // Basic check if it looks like binary
-    if (content.includes('\0')) {
-      alert('Binary files are not supported. Please upload text-based files (code, txt, md, etc.)');
-      clearFile();
-      return;
-    }
+  // Show loading state
+  fileNameSpan.textContent = "Processing file...";
+  filePreview.classList.remove('hidden');
+
+  try {
+    let content = '';
     
+    if (file.type === 'application/pdf') {
+      content = await extractTextFromPdf(file);
+    } else if (file.type.startsWith('image/')) {
+      content = await extractTextFromImage(file);
+    } else {
+      // Text files
+      content = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(file);
+      });
+    }
+
     currentFileContent = content;
     currentFileName = file.name;
-    
-    // Show preview
     fileNameSpan.textContent = file.name;
-    filePreview.classList.remove('hidden');
-  };
-  
-  reader.onerror = function() {
-    alert('Error reading file');
+    
+  } catch (error) {
+    console.error('File processing error:', error);
+    alert('Error processing file. Please try again.');
     clearFile();
-  };
-
-  reader.readAsText(file);
+  }
 });
 
 function clearFile() {
@@ -709,7 +841,8 @@ window.addEventListener('load', () => {
   // Optional: Add welcome message
   addMessageBubble({ 
     text: '👋 Hello! I\'m Veness. An AI assistant made by Ayush Vijay Vishwakarma. I can remember 20 previous conversations!', 
-    role: 'ai' 
+    role: 'ai',
+    showActions: false
   });
 
   // Mobile App Optimization: Handle Virtual Keyboard
@@ -731,4 +864,3 @@ window.addEventListener('load', () => {
     });
   }
 });
-
