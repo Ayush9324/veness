@@ -25,6 +25,13 @@ const settingsModal = document.getElementById('settingsModal');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 
+// Hidden Stats Elements
+const appLogo = document.getElementById('appLogo');
+const statsModal = document.getElementById('statsModal');
+const closeStatsBtn = document.getElementById('closeStatsBtn');
+const visitorCount = document.getElementById('visitorCount');
+const closeImageBtn = document.getElementById('closeImageBtn');
+
 // File Upload Elements
 const fileInput = document.getElementById('fileInput');
 const filePreview = document.getElementById('filePreview');
@@ -32,15 +39,23 @@ const fileNameSpan = document.getElementById('fileName');
 const removeFileBtn = document.getElementById('removeFileBtn');
 let currentFileContent = null;
 let currentFileName = null;
+let currentFileImage = null;
 
 // ========== SCROLL BEHAVIOR ==========
 let lastScrollTop = 0;
 let currentMarginTop = 0;
+let headerSnapTimer = null;
 
 chatArea.addEventListener('scroll', () => {
   const scrollTop = chatArea.scrollTop;
   const headerHeight = chatHeader.offsetHeight;
   
+  // Clear any pending snap
+  if (headerSnapTimer) clearTimeout(headerSnapTimer);
+  
+  // Ensure instant movement during scroll
+  chatHeader.style.transition = 'none';
+
   // Calculate scroll delta
   const delta = scrollTop - lastScrollTop;
   
@@ -65,6 +80,15 @@ chatArea.addEventListener('scroll', () => {
   if (scrollTop <= 0) {
     currentMarginTop = 0;
     chatHeader.style.marginTop = '0px';
+  } else {
+    // Snap logic: If scrolling stops and header is partially visible, hide it (go up)
+    headerSnapTimer = setTimeout(() => {
+      if (currentMarginTop < 0 && currentMarginTop > -headerHeight) {
+        chatHeader.style.transition = 'margin-top 0.3s ease-out';
+        currentMarginTop = -headerHeight; // Snap to hidden
+        chatHeader.style.marginTop = `${currentMarginTop}px`;
+      }
+    }, 150);
   }
   
   lastScrollTop = scrollTop;
@@ -293,8 +317,51 @@ function removeHighlight(root) {
   }
 }
 
+// Helper: Typewriter effect for AI responses
+async function typeWriterEffect(text, element, speed = 10) {
+  let i = 0;
+  const startTime = Date.now();
+  const maxDuration = 1500; // 1.5 seconds
+
+  return new Promise((resolve) => {
+    function type() {
+      const elapsedTime = Date.now() - startTime;
+
+      if (i < text.length && elapsedTime < maxDuration) {
+        // Type a few characters at a time for speed and "chunk" feel
+        const chunkSize = Math.floor(Math.random() * 3) + 1; 
+        const chunk = text.substring(i, i + chunkSize);
+        i += chunkSize;
+        
+        const currentText = text.substring(0, i);
+        
+        // Parse and sanitize
+        const rawHtml = marked.parse(currentText);
+        const cleanHtml = DOMPurify.sanitize(rawHtml, {
+          ADD_TAGS: ['pre', 'code', 'div', 'span', 'button', 'svg', 'path'],
+          ADD_ATTR: ['class', 'onclick', 'viewBox', 'fill', 'stroke', 'd', 'stroke-linecap', 'stroke-linejoin', 'stroke-width', 'style']
+        });
+        
+        element.innerHTML = cleanHtml;
+        
+        setTimeout(type, speed);
+      } else {
+        // Ensure final text is rendered correctly (either finished or timeout)
+        const rawHtml = marked.parse(text);
+        const cleanHtml = DOMPurify.sanitize(rawHtml, {
+          ADD_TAGS: ['pre', 'code', 'div', 'span', 'button', 'svg', 'path'],
+          ADD_ATTR: ['class', 'onclick', 'viewBox', 'fill', 'stroke', 'd', 'stroke-linecap', 'stroke-linejoin', 'stroke-width', 'style']
+        });
+        element.innerHTML = cleanHtml;
+        resolve();
+      }
+    }
+    type();
+  });
+}
+
 // Helper: Add message bubble
-function addMessageBubble({ text, role, autoScroll = true, showActions = true }) {
+function addMessageBubble({ text, role, autoScroll = true, showActions = true, image = null, skipRendering = false }) {
   const messageContainer = document.createElement('div');
   messageContainer.className = `flex items-start gap-3 message-animate ${role === 'user' ? 'justify-end' : ''}`;
 
@@ -311,24 +378,39 @@ function addMessageBubble({ text, role, autoScroll = true, showActions = true })
     bubble.className = 'glass-dark rounded-2xl rounded-tl-sm px-5 py-4 border border-white/10 break-words shadow-xl w-full';
   }
 
+  // Add image if present
+  if (image) {
+    const imgElement = document.createElement('img');
+    imgElement.src = image;
+    // Limit height to make it a preview, object-contain to keep aspect ratio
+    imgElement.className = 'max-w-full max-h-60 w-auto rounded-lg mb-3 border border-white/10 object-contain cursor-pointer hover:opacity-90 transition-opacity';
+    
+    // Optional: Click to view full size (simple implementation)
+    imgElement.onclick = () => openImageModal(image);
+    
+    bubble.appendChild(imgElement);
+  }
+
   const textElement = document.createElement('div'); 
   textElement.className = 'text-white text-sm md:text-base break-words whitespace-pre-wrap markdown-body';
   
   if (role === 'user') {
     textElement.textContent = text; 
   } else {
-    // Parse Markdown and Sanitize HTML for AI responses
-    // Note: DOMPurify needs to be configured to allow the class and style attributes for highlight.js
-    
-    // Ensure text is a string to prevent "e.replace is not a function" error
-    const safeText = (typeof text === 'string') ? text : String(text || '');
+    if (!skipRendering) {
+      // Parse Markdown and Sanitize HTML for AI responses
+      // Note: DOMPurify needs to be configured to allow the class and style attributes for highlight.js
+      
+      // Ensure text is a string to prevent "e.replace is not a function" error
+      const safeText = (typeof text === 'string') ? text : String(text || '');
 
-    const rawHtml = marked.parse(safeText);
-    const cleanHtml = DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['pre', 'code', 'div', 'span', 'button', 'svg', 'path'],
-      ADD_ATTR: ['class', 'onclick', 'viewBox', 'fill', 'stroke', 'd', 'stroke-linecap', 'stroke-linejoin', 'stroke-width', 'style']
-    });
-    textElement.innerHTML = cleanHtml;
+      const rawHtml = marked.parse(safeText);
+      const cleanHtml = DOMPurify.sanitize(rawHtml, {
+        ADD_TAGS: ['pre', 'code', 'div', 'span', 'button', 'svg', 'path'],
+        ADD_ATTR: ['class', 'onclick', 'viewBox', 'fill', 'stroke', 'd', 'stroke-linecap', 'stroke-linejoin', 'stroke-width', 'style']
+      });
+      textElement.innerHTML = cleanHtml;
+    }
   }
 
   bubble.appendChild(textElement);
@@ -349,8 +431,7 @@ function addMessageBubble({ text, role, autoScroll = true, showActions = true })
     speakBtn.title = "Read aloud";
     
     // Use textContent to get clean text without HTML tags
-    const speechText = textElement.textContent;
-    speakBtn.addEventListener('click', () => toggleSpeech(speechText, speakBtn, textElement));
+    speakBtn.addEventListener('click', () => toggleSpeech(textElement.textContent, speakBtn, textElement));
     
     // Copy Button
     const copyBtn = document.createElement('button');
@@ -555,7 +636,12 @@ async function sendMessage() {
     const fileContext = `\n\n[Attached File: ${currentFileName}]\n\`\`\`\n${currentFileContent}\n\`\`\`\n[End of File]`;
     
     // For UI: Just show the filename
-    displayText = text ? `${text}\n\n📎 **Attached:** ${currentFileName}` : `📎 **Attached:** ${currentFileName}`;
+    if (currentFileImage) {
+      // If it's an image, don't show the "Attached:" text, just the user's message
+      displayText = text;
+    } else {
+      displayText = text ? `${text}\n\n📎 **Attached:** ${currentFileName}` : `📎 **Attached:** ${currentFileName}`;
+    }
     
     // For API: Send full content
     apiText = text ? text + fileContext : `I have attached a file: ${currentFileName}. Please analyze it.\n${fileContext}`;
@@ -563,7 +649,11 @@ async function sendMessage() {
 
   if (apiText === '') return;
   
-  const userMsgElement = addMessageBubble({ text: displayText, role: 'user' });
+  const userMsgElement = addMessageBubble({ 
+    text: displayText, 
+    role: 'user',
+    image: currentFileImage 
+  });
   messageInput.value = '';
   messageInput.style.height = 'auto';
   
@@ -605,7 +695,11 @@ async function sendMessage() {
     hideTypingIndicator();
     // Don't auto-scroll to bottom for AI response to keep user message in view
     // But ensure at least the start of the AI message is visible if it's off-screen
-    const aiMsgElement = addMessageBubble({ text: aiResponse, role: 'ai', autoScroll: false });
+    const aiMsgElement = addMessageBubble({ text: aiResponse, role: 'ai', autoScroll: false, skipRendering: true });
+    
+    // Animate the typing effect
+    const textElement = aiMsgElement.querySelector('.markdown-body');
+    await typeWriterEffect(aiResponse, textElement);
     
     // Check if the AI message is visible. If not (e.g. user scrolled up), don't force scroll.
     // But if we are in "auto-align" mode (user msg at top), the AI msg starts right below it.
@@ -802,6 +896,12 @@ fileInput.addEventListener('change', async (e) => {
     if (file.type === 'application/pdf') {
       content = await extractTextFromPdf(file);
     } else if (file.type.startsWith('image/')) {
+      // Read image as Data URL for preview
+      currentFileImage = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
       content = await extractTextFromImage(file);
     } else {
       // Text files
@@ -828,6 +928,7 @@ function clearFile() {
   fileInput.value = '';
   currentFileContent = null;
   currentFileName = null;
+  currentFileImage = null;
   filePreview.classList.add('hidden');
 }
 
@@ -864,3 +965,78 @@ window.addEventListener('load', () => {
     });
   }
 });
+
+// Hidden Stats Logic
+let logoClicks = 0;
+let clickResetTimer = null;
+
+appLogo.addEventListener('click', () => {
+  logoClicks++;
+  
+  // Reset clicks if user stops clicking for 5 seconds
+  clearTimeout(clickResetTimer);
+  clickResetTimer = setTimeout(() => {
+    logoClicks = 0;
+  }, 5000);
+
+  if (logoClicks === 30) {
+    showStatsModal();
+    logoClicks = 0;
+  }
+});
+
+async function showStatsModal() {
+  statsModal.classList.remove('hidden');
+  statsModal.classList.add('flex');
+  
+  try {
+    const response = await fetch('/api/stats');
+    const data = await response.json();
+    visitorCount.textContent = data.visits.toLocaleString();
+  } catch (error) {
+    console.error('Failed to fetch stats:', error);
+    visitorCount.textContent = 'Error';
+  }
+}
+
+closeStatsBtn.addEventListener('click', () => {
+  statsModal.classList.add('hidden');
+  statsModal.classList.remove('flex');
+});
+
+statsModal.addEventListener('click', (e) => {
+  if (e.target === statsModal) {
+    statsModal.classList.add('hidden');
+    statsModal.classList.remove('flex');
+  }
+});
+
+// Image Modal Logic
+function openImageModal(src) {
+  const modal = document.getElementById('imageModal');
+  const img = document.getElementById('fullImage');
+  img.src = src;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeImageModal() {
+  const modal = document.getElementById('imageModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.getElementById('fullImage').src = '';
+}
+
+// Event Listeners for Image Modal
+if (closeImageBtn) {
+  closeImageBtn.addEventListener('click', closeImageModal);
+}
+
+const imageModal = document.getElementById('imageModal');
+if (imageModal) {
+  imageModal.addEventListener('click', (e) => {
+    if (e.target === imageModal) {
+      closeImageModal();
+    }
+  });
+}

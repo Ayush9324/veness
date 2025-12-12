@@ -40,7 +40,7 @@
     <div id="chatHeader" class="glass-dark px-6 py-4 flex items-center justify-between border-b border-white/10">
       <!-- Left: Branding -->
       <div class="flex items-center gap-3">
-        <img src="LG.png" alt="Logo" class="w-14 h-14 object-contain">
+        <img id="appLogo" src="LG.png" alt="Logo" class="w-14 h-14 object-contain cursor-pointer select-none">
         <div class="flex flex-col">
           <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <span class="text-gray-400">Ayush's</span>
@@ -161,6 +161,16 @@
 
   </div>
 
+  <!-- Image Preview Modal -->
+  <div id="imageModal" class="fixed inset-0 z-[60] bg-black/95 backdrop-blur-xl hidden items-center justify-center p-4">
+    <button id="closeImageBtn" class="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+    <img id="fullImage" src="" alt="Full Preview" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl">
+  </div>
+
   <!-- Fullscreen Editor Modal -->
   <div id="fullscreenModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl hidden flex-col">
     <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
@@ -214,15 +224,55 @@
           <span class="text-blue-400 font-mono bg-blue-400/10 px-2 py-1 rounded text-sm">llama-3.1-8b-instant</span>
         </div>
 
+
+
         <!-- Old Site Link -->
-        <div class="space-y-2">
-          <label class="text-sm text-gray-400 block">Legacy Version</label>
+        <div class="pt-4 border-t border-white/10">
+          <label class="text-sm text-gray-400 block mb-3">Legacy Version</label>
           <a href="https://wenes.onrender.com" target="_blank" class="flex items-center justify-between w-full p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group text-left">
             <span class="text-white group-hover:text-emerald-400 transition-colors">Old Wenes AI Voice Assistant</span>
             <svg class="w-4 h-4 text-gray-500 group-hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
             </svg>
           </a>
+        </div>
+
+        <!-- Download App -->
+        <div class="pt-4 border-t border-white/10">
+          <a href="veness.apk" download class="flex items-center justify-center gap-2 w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl transition-all border border-white/10 group">
+            <svg class="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+            <span>Download Veness Android App</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Stats Modal -->
+  <div id="statsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+        <h2 class="text-white font-semibold text-lg">Admin Stats</h2>
+        <button id="closeStatsBtn" class="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6 space-y-6">
+        <div class="text-center">
+          <p class="text-gray-400 text-sm mb-2">Total Visitors (Past Month)</p>
+          <h3 id="visitorCount" class="text-4xl font-bold text-emerald-400 font-mono">Loading...</h3>
+        </div>
+        
+        <div class="pt-4 border-t border-white/10 text-center">
+          <p class="text-xs text-gray-500">Only visible to administrators.</p>
         </div>
       </div>
     </div>
