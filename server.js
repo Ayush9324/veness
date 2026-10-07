@@ -69,8 +69,27 @@ app.use(express.static(path.join(__dirname, "public")));
 // Lazy load Groq client
 let client;
 
-// Allowed models whitelist
-const ALLOWED_MODELS = ["llama3-70b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+// Keep this list updated with the current Groq free models.
+// The backend will try them in order and automatically fall back if one is unavailable.
+const FREE_CHAT_MODELS = [
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-safeguard-20b",
+  "qwen-qwq-32b-preview",
+];
+
+const DEFAULT_CHAT_MODEL = FREE_CHAT_MODELS[0];
+
+function isModelAvailabilityError(err) {
+  const message = (err?.message || "").toLowerCase();
+  const serialized = JSON.stringify(err || {});
+
+  return serialized.includes("model_not_found") ||
+    serialized.includes("not have access to it") ||
+    message.includes("does not exist") ||
+    message.includes("model not found") ||
+    message.includes("not have access");
+}
 
 // API: chat with conversation memory
 app.post("/api/chat", async (req, res) => {
@@ -105,29 +124,39 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Invalid message format or content too long" });
   }
 
-  // Validate model
-  const model = body.model || "llama3-70b-8192";
-  console.log(`Incoming request for model: ${model}`); // Log the requested model
+  const requestedModel = body.model || DEFAULT_CHAT_MODEL;
+  const candidateModels = [...new Set([requestedModel, ...FREE_CHAT_MODELS])];
 
-  if (!ALLOWED_MODELS.includes(model)) {
-    console.error(`❌ Blocked invalid model request: ${model}`);
-    return res.status(400).json({ error: "Invalid model specified" });
+  console.log(`Incoming request for model: ${requestedModel}`);
+
+  let lastError = null;
+  let response = null;
+
+  for (const model of candidateModels) {
+    try {
+      response = await client.chat.completions.create({
+        model,
+        messages: body.messages,
+        temperature: body.temperature ?? 0.7,
+        max_tokens: body.max_tokens ?? 1024,
+      });
+      if (response) {
+        console.log(`✅ Using Groq model: ${model}`);
+        return res.json(response);
+      }
+    } catch (err) {
+      lastError = err;
+      if (!isModelAvailabilityError(err)) {
+        console.error(`🔥 Groq API Error for model ${model}:`, err);
+        return res.status(500).json({ error: "An error occurred while processing your request." });
+      }
+
+      console.warn(`⚠️ Model unavailable: ${model}. Trying next fallback.`);
+    }
   }
 
-  try {
-    const response = await client.chat.completions.create({
-      model: model,
-      messages: body.messages, // full conversation history
-      temperature: body.temperature ?? 0.7,
-      max_tokens: body.max_tokens ?? 1024,
-    });
-
-    res.json(response); // return full Groq response
-  } catch (err) {
-    console.error("🔥 Groq API Error:", err);
-    // Security: Don't leak internal error details to client
-    res.status(500).json({ error: "An error occurred while processing your request." });
-  }
+  console.error("🔥 No valid Groq model available for this account.", lastError);
+  return res.status(500).json({ error: "No free Groq model is currently available for this API key." });
 });
 
 // Simple in-memory stats (reset on restart)
