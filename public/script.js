@@ -941,7 +941,7 @@ window.addEventListener('load', () => {
   messageInput.focus();
   // Optional: Add welcome message
   addMessageBubble({ 
-    text: '👋 Hello! I\'m Veness. A Personal AI assistant made by Ayush Vijay Vishwakarma for himself. I can remember 20 previous conversations!. \nNothing here saves so you can ask anything and nobody will ever get your identity.', 
+    text: '👋 Hello! I\'m Veness. An AI assistant made by Ayush Vijay Vishwakarma. I can remember 20 previous conversations!. \nNothing here saves so you can ask anything and nobody will ever know your identity.', 
     role: 'ai',
     showActions: false
   });
