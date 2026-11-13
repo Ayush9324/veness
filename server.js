@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { readFile } from "fs/promises";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
@@ -33,6 +34,7 @@ app.use(
           "cdn.tailwindcss.com",
           "cdn.jsdelivr.net",
           "cdnjs.cloudflare.com",
+          "https://static.cloudflareinsights.com",
           "'unsafe-inline'",
           "'unsafe-eval'", // Required for Tailwind CDN
           "blob:", // Required for Tesseract/PDF.js workers
@@ -41,10 +43,12 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net"],
         imgSrc: ["'self'", "data:", "blob:"],
         connectSrc: [
-          "'self'", 
-          "cdnjs.cloudflare.com", 
-          "cdn.jsdelivr.net", 
+          "'self'",
+          "cdnjs.cloudflare.com",
+          "cdn.jsdelivr.net",
           "https://tessdata.projectnaptha.com", // Required for Tesseract language data
+          "https://cloudflareinsights.com",
+          "https://*.cloudflareinsights.com",
           "data:", // Required for Tesseract workers
           "blob:",
         ],
@@ -62,6 +66,28 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 app.use(express.json());
+
+// Simple in-memory stats (reset on restart)
+let totalVisits = 0;
+// Simulate some past visits for "past month" feel
+let pastMonthVisits = Math.floor(Math.random() * 5000) + 1000;
+
+const cloudflareAnalyticsScript = `<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "436f75c8edd441c8adab18ccb68267e0"}'></script>`;
+
+async function sendPageWithAnalytics(res, next) {
+  try {
+    const html = await readFile(path.join(__dirname, "public", "index.html"), "utf8");
+    res.type("html").send(html.replace("</head>", `  ${cloudflareAnalyticsScript}\n</head>`));
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Serve the app entry point with Cloudflare Web Analytics installed.
+app.get(["/", "/index.html"], (req, res, next) => {
+  totalVisits++;
+  sendPageWithAnalytics(res, next);
+});
 
 // Serve frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, "public")));
@@ -113,9 +139,9 @@ app.post("/api/chat", async (req, res) => {
   }
 
   // Security: Validate message content
-  const isValidConversation = body.messages.every(msg => 
-    msg && 
-    typeof msg.role === 'string' && 
+  const isValidConversation = body.messages.every(msg =>
+    msg &&
+    typeof msg.role === 'string' &&
     typeof msg.content === 'string' &&
     msg.content.length < 20000 // Limit message size
   );
@@ -159,24 +185,16 @@ app.post("/api/chat", async (req, res) => {
   return res.status(500).json({ error: "No free Groq model is currently available for this API key." });
 });
 
-// Simple in-memory stats (reset on restart)
-let totalVisits = 0;
-// Simulate some past visits for "past month" feel
-let pastMonthVisits = Math.floor(Math.random() * 5000) + 1000; 
-
 app.get("/api/stats", (req, res) => {
-  res.json({ 
+  res.json({
     visits: totalVisits + pastMonthVisits,
     uptime: process.uptime()
   });
 });
 
 // Handle fallback routes - serve index.html from public
-app.get("*", (req, res) => {
-  if (req.path === '/' || req.path === '/index.html') {
-    totalVisits++;
-  }
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get("*", (req, res, next) => {
+  sendPageWithAnalytics(res, next);
 });
 
 // Use Render's PORT
